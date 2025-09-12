@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>주차 할인권 계산기</title>
+<style>
+  :root{
+    --bg:#f7f7f9; --card:#ffffff; --text:#222; --muted:#6b7280;
+    --brand:#2563eb; --brand-press:#1d4ed8; --border:#e5e7eb;
+    --shadow:0 6px 20px rgba(0,0,0,.06); --radius:14px;
+  }
+  body{background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,Apple SD Gothic Neo,Noto Sans KR,sans-serif;margin:0}
+  .wrap{max-width:640px;margin:0 auto;padding:18px}
+  .card{background:var(--card);box-shadow:var(--shadow);border-radius:var(--radius);padding:18px 16px;margin:12px 0}
+  h1{font-size:1.25rem;margin:10px 0 6px}
+  .sub{color:var(--muted);font-size:.92rem;margin:0 0 10px}
+  .row{display:flex;align-items:center;gap:10px;margin:12px 0}
+  .col{flex:1; display:flex; align-items:center; gap:8px}
+  input{flex:1; width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:12px;padding:12px;font-size:1.05rem}
+  input::placeholder{color:#9ca3af}
+  .unit{min-width:32px;text-align:center;font-size:1rem}
+  .btn{width:100%;padding:14px;border:0;border-radius:12px;font-weight:700;font-size:1.06rem;background:var(--brand);color:#fff}
+  .btn:disabled{opacity:.4}
+  .btn:active{background:var(--brand-press)}
+  .btn-secondary{background:#111827;color:#fff}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+  .stat{border:1px solid var(--border);border-radius:12px;padding:12px;background:#fcfcfd;text-align:center}
+  .stat .k{font-size:.88rem;color:var(--muted)}
+  .stat .v{font-size:1.6rem;font-weight:800;margin-top:4px}
+  .badge{display:inline-flex;align-items:center;gap:6px;background:#eef2ff;color:#3730a3;border-radius:999px;padding:6px 10px;font-size:.9rem;font-weight:700}
+  .footer{font-size:.82rem;color:var(--muted);text-align:center;margin-top:10px}
+  .hidden{display:none}
+  button,input{min-height:48px}
+  /* iOS number input spinner 숨김 */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{ -webkit-appearance: none; margin: 0; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>주차 할인권 계산기</h1>
+      <p class="sub">방문권 1개(100분 무료)는 기본 적용됩니다.</p>
+
+      <div class="row">
+        <span class="badge">방문권: <strong>1개</strong> / 100분 무료</span>
+      </div>
+
+      <!-- 시간/분 입력: 라벨 제거, 옆에만 단위 표기 -->
+      <div class="row" aria-label="주차시간 입력">
+        <div class="col">
+          <input id="hours" type="number" min="0" max="5" inputmode="numeric"
+                 placeholder="0시" aria-label="시간(0~5)" />
+          <span class="unit" aria-hidden="true">시간</span>
+        </div>
+        <div class="col">
+          <input id="mins" type="number" min="0" max="59" inputmode="numeric"
+                 placeholder="00분" aria-label="분(0~59)" />
+          <span class="unit" aria-hidden="true">분</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="calcBtn" class="btn" disabled>계산하기</button>
+      </div>
+
+      <!-- 결과 -->
+      <div id="resultCard" class="card hidden" role="region" aria-live="polite" aria-label="계산 결과">
+        <div class="grid">
+          <div class="stat">
+            <div class="k">필요한 할인권 개수</div>
+            <div id="tickets" class="v">0</div>
+          </div>
+          <div class="stat">
+            <div class="k">남은 시간(분)</div>
+            <div id="remaining" class="v">0</div>
+          </div>
+        </div>
+        <div class="sub" id="detailLine" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:14px">
+          <button id="resetBtn" class="btn btn-secondary">리셋</button>
+        </div>
+      </div>
+
+      <p class="footer">할인권 1개 = 30분 무료 / 방문권 1개 = 100분 무료</p>
+    </div>
+  </div>
+
+<script>
+  const hoursInput = document.getElementById('hours');
+  const minsInput = document.getElementById('mins');
+  const calcBtn = document.getElementById('calcBtn');
+  const resultCard = document.getElementById('resultCard');
+  const ticketsEl = document.getElementById('tickets');
+  const remainingEl = document.getElementById('remaining');
+  const resetBtn = document.getElementById('resetBtn');
+  const detailLine = document.getElementById('detailLine');
+
+  const VISIT_PASS_MINUTES = 100;
+  const TICKET_MINUTES = 30;
+
+  // placeholder만 보이게(0시 00분처럼 보이고 탭하면 사라짐)
+  hoursInput.value = '';
+  minsInput.value = '';
+
+  function getTotalMinutes() {
+    const h = Number(hoursInput.value);
+    const m = Number(minsInput.value);
+    return h * 60 + m;
+  }
+
+  function validate() {
+    // 값이 비어있지 않고 범위 내인지 체크
+    const hStr = hoursInput.value, mStr = minsInput.value;
+    if (hStr === '' || mStr === '') return false;
+    const h = Number(hStr), m = Number(mStr);
+    return Number.isInteger(h) && h >= 0 && h <= 5 &&
+           Number.isInteger(m) && m >= 0 && m <= 59;
+  }
+
+  function updateButton() {
+    calcBtn.disabled = !validate();
+  }
+
+  // 숫자 입력에서 선행 0 제거/허용, 범위 강제
+  function clampInputs(e) {
+    const el = e.target;
+    if (el.id === 'hours') {
+      if (el.value === '') return updateButton();
+      let v = Math.max(0, Math.min(5, Number(el.value)));
+      el.value = String(v);
+    } else if (el.id === 'mins') {
+      if (el.value === '') return updateButton();
+      let v = Math.max(0, Math.min(59, Number(el.value)));
+      el.value = String(v);
+    }
+    updateButton();
+  }
+
+  hoursInput.addEventListener('input', clampInputs);
+  minsInput.addEventListener('input', clampInputs);
+
+  calcBtn.addEventListener('click', () => {
+    const total = getTotalMinutes();
+
+    const afterVisit = Math.max(0, total - VISIT_PASS_MINUTES);
+    const tickets = afterVisit === 0 ? 0 : Math.ceil(afterVisit / TICKET_MINUTES);
+
+    const freeTotal = VISIT_PASS_MINUTES + tickets * TICKET_MINUTES;
+    const remaining = freeTotal - total; // 남은 시간 정의(>=0)
+
+    ticketsEl.textContent = tickets;
+    remainingEl.textContent = remaining;
+
+    detailLine.textContent =
+      `총 ${total}분 → 방문권 100분 적용 후 ${afterVisit}분 → 할인권 ${tickets}개 사용(총 무료 ${freeTotal}분) → 남은 시간 ${remaining}분`;
+
+    resultCard.classList.remove('hidden');
+  });
+
+  resetBtn.addEventListener('click', () => {
+    hoursInput.value = '';
+    minsInput.value = '';
+    calcBtn.disabled = true;
+    resultCard.classList.add('hidden');
+    ticketsEl.textContent = '0';
+    remainingEl.textContent = '0';
+    detailLine.textContent = '';
+    hoursInput.focus();
+  });
+
+  updateButton();
+</script>
+</body>
+</html>
