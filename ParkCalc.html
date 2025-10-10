@@ -24,7 +24,7 @@
   .btn:disabled{opacity:.4}
   .btn:active{background:var(--brand-press)}
   .btn-secondary{background:#111827;color:#fff}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+  .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px}
   .stat{border:1px solid var(--border);border-radius:12px;padding:12px;background:#fcfcfd;text-align:center}
   .stat .k{font-size:.88rem;color:var(--muted)}
   .stat .v{font-size:1.6rem;font-weight:800;margin-top:4px}
@@ -32,22 +32,22 @@
   .footer{font-size:.82rem;color:var(--muted);text-align:center;margin-top:10px}
   .hidden{display:none}
   button,input{min-height:48px}
-  /* iOS number input spinner 숨김 */
   input[type=number]::-webkit-inner-spin-button,
   input[type=number]::-webkit-outer-spin-button{ -webkit-appearance: none; margin: 0; }
+  @media (max-width:420px){ .grid{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
       <h1>주차 할인권 계산기</h1>
-      <p class="sub">방문권 1개(100분 무료)는 기본 적용됩니다.</p>
+      <p class="sub">방문권 1개(90분 무료) + 할인권 1개(30분, 최대 5개)</p>
 
       <div class="row">
-        <span class="badge">방문권: <strong>1개</strong> / 100분 무료</span>
+        <span class="badge">방문권: <strong>1개</strong> / 90분 무료</span>
       </div>
 
-      <!-- 시간/분 입력: 라벨 제거, 옆에만 단위 표기 -->
+      <!-- 시간/분 입력: 옆에만 단위 표기, placeholder로 0시 00분 -->
       <div class="row" aria-label="주차시간 입력">
         <div class="col">
           <input id="hours" type="number" min="0" max="5" inputmode="numeric"
@@ -69,12 +69,16 @@
       <div id="resultCard" class="card hidden" role="region" aria-live="polite" aria-label="계산 결과">
         <div class="grid">
           <div class="stat">
-            <div class="k">필요한 할인권 개수</div>
+            <div class="k">사용 할인권 개수 (최대 5개)</div>
             <div id="tickets" class="v">0</div>
           </div>
-          <div class="stat">
+          <div id="remainStat" class="stat">
             <div class="k">남은 시간(분)</div>
             <div id="remaining" class="v">0</div>
+          </div>
+          <div id="feeStat" class="stat hidden">
+            <div class="k">초과 주차 요금(원)</div>
+            <div id="overFee" class="v">0</div>
           </div>
         </div>
         <div class="sub" id="detailLine" style="margin-top:10px"></div>
@@ -83,7 +87,10 @@
         </div>
       </div>
 
-      <p class="footer">할인권 1개 = 30분 무료 / 방문권 1개 = 100분 무료</p>
+      <p class="footer">
+        방문권 90분 + 할인권(각 30분, 최대 5개) 적용 후 남으면 “남은 시간”으로 표시,<br/>
+        모자라면 초과 시간에 대해 <strong>15분당 1,000원</strong>으로 “초과 주차 요금” 표시.
+      </p>
     </div>
   </div>
 
@@ -92,26 +99,35 @@
   const minsInput = document.getElementById('mins');
   const calcBtn = document.getElementById('calcBtn');
   const resultCard = document.getElementById('resultCard');
+
   const ticketsEl = document.getElementById('tickets');
   const remainingEl = document.getElementById('remaining');
+  const overFeeEl = document.getElementById('overFee');
+
+  const remainStat = document.getElementById('remainStat');
+  const feeStat = document.getElementById('feeStat');
+
   const resetBtn = document.getElementById('resetBtn');
   const detailLine = document.getElementById('detailLine');
 
-  const VISIT_PASS_MINUTES = 100;
-  const TICKET_MINUTES = 30;
+  // 새로운 규칙
+  const VISIT_PASS_MINUTES = 90;   // 방문권 1개
+  const TICKET_MINUTES = 30;       // 할인권 1개
+  const MAX_TICKETS = 5;           // 할인권 최대 개수
+  const OVER_FEE_UNIT_MIN = 15;    // 15분당
+  const OVER_FEE_PER_UNIT = 1000;  // 1,000원
 
   // placeholder만 보이게(0시 00분처럼 보이고 탭하면 사라짐)
   hoursInput.value = '';
   minsInput.value = '';
 
   function getTotalMinutes() {
-    const h = Number(hoursInput.value);
-    const m = Number(minsInput.value);
+    const h = Number(hoursInput.value) || 0;
+    const m = Number(minsInput.value) || 0;
     return h * 60 + m;
   }
 
   function validate() {
-    // 값이 비어있지 않고 범위 내인지 체크
     const hStr = hoursInput.value, mStr = minsInput.value;
     if (hStr === '' || mStr === '') return false;
     const h = Number(hStr), m = Number(mStr);
@@ -123,7 +139,6 @@
     calcBtn.disabled = !validate();
   }
 
-  // 숫자 입력에서 선행 0 제거/허용, 범위 강제
   function clampInputs(e) {
     const el = e.target;
     if (el.id === 'hours') {
@@ -144,17 +159,49 @@
   calcBtn.addEventListener('click', () => {
     const total = getTotalMinutes();
 
+    // 방문권 적용 후 남은 유료분
     const afterVisit = Math.max(0, total - VISIT_PASS_MINUTES);
-    const tickets = afterVisit === 0 ? 0 : Math.ceil(afterVisit / TICKET_MINUTES);
 
-    const freeTotal = VISIT_PASS_MINUTES + tickets * TICKET_MINUTES;
-    const remaining = freeTotal - total; // 남은 시간 정의(>=0)
+    // 필요한 할인권 개수(요금을 0으로 만들 수 있도록) 계산하되, 최대 5개 제한 적용
+    const neededTickets = afterVisit === 0 ? 0 : Math.ceil(afterVisit / TICKET_MINUTES);
+    const usedTickets = Math.min(neededTickets, MAX_TICKETS);
 
-    ticketsEl.textContent = tickets;
-    remainingEl.textContent = remaining;
+    // 총 무료 시간
+    const freeTotal = VISIT_PASS_MINUTES + usedTickets * TICKET_MINUTES;
+
+    // 남는 무료시간 / 초과 시간
+    const remaining = Math.max(0, freeTotal - total);         // 무료가 남는 경우
+    const overMinutes = Math.max(0, total - freeTotal);       // 무료가 부족한 경우
+
+    // 초과 요금: 초과시간이 1분이라도 있으면 15분 단위 올림 청구
+    const overFee = overMinutes > 0 ? Math.ceil(overMinutes / OVER_FEE_UNIT_MIN) * OVER_FEE_PER_UNIT : 0;
+
+    // 표시
+    ticketsEl.textContent = String(usedTickets);
+    // 남는 경우: 남은 시간 카드 ON, 요금 카드 OFF
+    if (overMinutes === 0) {
+      remainingEl.textContent = String(remaining);
+      remainStat.classList.remove('hidden');
+      feeStat.classList.add('hidden');
+    } else {
+      // 초과인 경우: 남은 시간 카드 OFF, 요금 카드 ON
+      overFeeEl.textContent = overFee.toLocaleString('ko-KR');
+      feeStat.classList.remove('hidden');
+      remainStat.classList.add('hidden');
+    }
+
+    // 안내 문구(상세)
+    const capNote = neededTickets > MAX_TICKETS
+      ? `필요 할인권은 ${neededTickets}개였으나, 최대 ${MAX_TICKETS}개까지만 적용됨. `
+      : '';
+    const tail = overMinutes === 0
+      ? `남은 시간: ${remaining}분`
+      : `초과 시간: ${overMinutes}분 → 초과 요금: ${overFee.toLocaleString('ko-KR')}원 (15분당 1,000원)`;
 
     detailLine.textContent =
-      `총 ${total}분 → 방문권 100분 적용 후 ${afterVisit}분 → 할인권 ${tickets}개 사용(총 무료 ${freeTotal}분) → 남은 시간 ${remaining}분`;
+      `총 ${total}분 → 방문권 ${VISIT_PASS_MINUTES}분 적용 후 ${afterVisit}분 → ` +
+      `할인권 ${usedTickets}개 사용(총 무료 ${freeTotal}분). ` +
+      capNote + tail;
 
     resultCard.classList.remove('hidden');
   });
@@ -166,6 +213,7 @@
     resultCard.classList.add('hidden');
     ticketsEl.textContent = '0';
     remainingEl.textContent = '0';
+    overFeeEl.textContent = '0';
     detailLine.textContent = '';
     hoursInput.focus();
   });
