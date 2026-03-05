@@ -14,7 +14,10 @@ FRED API 키 (무료 발급 필수):
     export FRED_API_KEY="your_key"
 """
 
+import io
 import os
+import subprocess
+import sys
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
@@ -224,5 +227,23 @@ def main():
     print(f"{'━'*68}\n")
 
 
+def copy_to_clipboard(text: str):
+    """출력 결과를 클립보드에 복사합니다 (macOS: pbcopy)."""
+    try:
+        subprocess.run("pbcopy", input=text.encode(), check=True)
+        print("  ✓ 결과가 클립보드에 복사되었습니다.")
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
+    buf = io.StringIO()
+    tee = sys.stdout
+    sys.stdout = buf
+
     main()
+
+    output = buf.getvalue()
+    sys.stdout = tee
+    print(output, end="")
+    copy_to_clipboard(output)
