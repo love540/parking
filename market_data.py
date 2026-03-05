@@ -26,7 +26,7 @@ try:
 except ImportError:
     HAS_FRED = False
 
-FRED_API_KEY = os.getenv("FRED_API_KEY", None)
+FRED_API_KEY = os.getenv("FRED_API_KEY", "72f673fa6a935610cda0519a70979239")
 
 
 # ── 티커 / 시리즈 정의 ──────────────────────────────────────────────────────────
