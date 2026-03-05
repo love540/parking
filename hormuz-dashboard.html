@@ -467,7 +467,7 @@
   <div class="alert-banner">
     <span class="icon">⚠️</span>
     <span>
-      <strong>경보:</strong> 2025년 3월 기준 호르무즈 해협 일일 통과 선박 수가 기준치(50척) 대비 23% 급감. 전쟁보험료 1.85%p 폭등. 공급망 리스크 고조.
+      <strong>경보:</strong> 2026년 3월 기준 호르무즈 해협 일일 통과 선박 수가 기준치(50척) 대비 23% 급감. 전쟁보험료 1.85%p 폭등. 공급망 리스크 고조.
     </span>
   </div>
 
@@ -491,7 +491,7 @@
         <span>vs. 기준치 (50척/일)</span>
       </div>
       <div class="kpi-sub">
-        2025-03-03 기준 · 주간 평균 38척<br>
+        2026-03-03 기준 · 주간 평균 38척<br>
         직전주 대비 <strong style="color:var(--red)">-5척</strong> 감소 · AIS 신호 소실 구간 확대 중
       </div>
     </div>
@@ -508,7 +508,7 @@
       <div class="kpi-value" id="warRisk">+1.85<span style="font-size:1.1rem">%</span></div>
       <div class="kpi-change">
         <span class="delta up">▲ 1,133%</span>
-        <span>vs. 2024년 10월 (0.15%)</span>
+        <span>vs. 2025년 10월 (0.15%)</span>
       </div>
       <div class="kpi-sub">
         Lloyd's Market Association 기준 · 호르무즈 해협 전 구역<br>
@@ -532,7 +532,7 @@
       </div>
       <div class="kpi-sub">
         Yanbu 터미널 (사우디): 350만 BPD 처리 · 현재 한계 근접<br>
-        ADNOC Jafurah: 확장 공사 2025 Q3 완료 예정
+        ADNOC Jafurah: 확장 공사 2025 Q3 완료 (증설 가동 중)
       </div>
     </div>
 
@@ -593,12 +593,12 @@ const VESSEL_LABELS = ['1/6','1/13','1/20','1/27','2/3','2/10','2/17','2/24','3/
 const VESSEL_BASE   = [49, 47, 46, 43, 41, 39, 37, 36, 38];
 const VESSEL_WARN   = 40; // threshold
 
-const RISK_LABELS = ['2024/10','2024/11','2024/12','2025/01','2025/02','2025/03'];
+const RISK_LABELS = ['2025/10','2025/11','2025/12','2026/01','2026/02','2026/03'];
 const RISK_BASE   = [0.15, 0.28, 0.45, 0.65, 1.20, 1.85];
 
 const NEWS_ITEMS = [
   {
-    date: '2025-03-02',
+    date: '2026-03-02',
     source: 'Saudi Aramco IR',
     opBadge: 'operational',
     opLabel: 'OPERATIONAL',
@@ -607,16 +607,16 @@ const NEWS_ITEMS = [
     barPct: 92, barColor: 'green', barLabel: '가동률 92%'
   },
   {
-    date: '2025-02-28',
+    date: '2026-02-28',
     source: 'ADNOC Press Release',
     opBadge: 'expanding',
     opLabel: 'EXPANDING',
     title: 'ADNOC Jafurah 가스전 수출 터미널, 78% 가동 — Q3 확장 공사 진행 중',
-    body: '아부다비 Jafurah 터미널은 현재 78% 가동 중이며, 2025년 3분기 완공 예정인 2단계 확장으로 하루 150만 BOE 추가 처리 능력 확보 예정.',
+    body: '아부다비 Jafurah 터미널은 현재 78% 가동 중이며, 2025년 3분기 완공된 2단계 확장으로 하루 150만 BOE 추가 처리 능력 확보 완료.',
     barPct: 78, barColor: 'blue', barLabel: '가동률 78%'
   },
   {
-    date: '2025-03-01',
+    date: '2026-03-01',
     source: 'S&P Global Platts',
     opBadge: 'expanding',
     opLabel: 'EXPANDING',
@@ -625,7 +625,7 @@ const NEWS_ITEMS = [
     barPct: 89, barColor: 'blue', barLabel: '탱크 가동률 89%'
   },
   {
-    date: '2025-02-26',
+    date: '2026-02-26',
     source: 'Reuters',
     opBadge: 'monitoring',
     opLabel: 'MONITORING',
@@ -634,16 +634,16 @@ const NEWS_ITEMS = [
     barPct: 22, barColor: 'yellow', barLabel: '대체 루트 가동 22%'
   },
   {
-    date: '2025-03-03',
+    date: '2026-03-03',
     source: 'Lloyd\'s List',
     opBadge: 'reduced',
     opLabel: 'REDUCED',
     title: '호르무즈 통과 VLCC 운항 편수 전년 동기 대비 31% 감소 확인',
-    body: 'Lloyd\'s List Intelligence AIS 분석 결과, 2025년 2월 VLCC(초대형 원유 운반선) 호르무즈 통과 횟수가 전년 동기 대비 31% 급감. 이란 긴장 고조로 인한 선주들의 자발적 우회 항로 채택 증가.',
+    body: 'Lloyd\'s List Intelligence AIS 분석 결과, 2026년 2월 VLCC(초대형 원유 운반선) 호르무즈 통과 횟수가 전년 동기 대비 31% 급감. 이란 긴장 고조로 인한 선주들의 자발적 우회 항로 채택 증가.',
     barPct: 31, barColor: 'red', barLabel: 'AIS 감소율 31%'
   },
   {
-    date: '2025-02-20',
+    date: '2026-02-20',
     source: 'Energy Intel',
     opBadge: 'operational',
     opLabel: 'OPERATIONAL',
