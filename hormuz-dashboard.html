@@ -428,11 +428,125 @@
 
   .footer strong { color: var(--accent); }
 
+  /* ─── LIVE STATUS BADGE ─── */
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    cursor: default;
+    user-select: none;
+  }
+
+  .live-badge.rss-live {
+    background: rgba(34,197,94,0.15);
+    color: var(--green);
+    border: 1px solid rgba(34,197,94,0.3);
+  }
+
+  .live-badge.sim-mode {
+    background: rgba(234,179,8,0.15);
+    color: var(--yellow);
+    border: 1px solid rgba(234,179,8,0.3);
+  }
+
+  .live-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+
+  .live-dot.green { background: var(--green); }
+  .live-dot.yellow { background: var(--yellow); }
+
+  /* ─── COUNTDOWN ─── */
+  .countdown-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .countdown-wrap .cd-num {
+    font-family: 'Courier New', monospace;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 0.8rem;
+  }
+
+  /* ─── NEWS SECTION HEADER ─── */
+  .news-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    margin-top: 28px;
+  }
+
+  .news-section-header .section-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+
+  .news-section-header .feed-mode {
+    font-size: 0.66rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 5px;
+    letter-spacing: 0.04em;
+  }
+
+  .feed-mode.rss-live {
+    background: rgba(34,197,94,0.15);
+    color: var(--green);
+  }
+
+  .feed-mode.sim-mode {
+    background: rgba(234,179,8,0.15);
+    color: var(--yellow);
+  }
+
+  .news-section-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ─── NEWS NEW BADGE ─── */
+  .news-new-badge {
+    font-size: 0.6rem;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(6,182,212,0.2);
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    animation: fadeInBadge 0.5s ease;
+  }
+
+  @keyframes fadeInBadge {
+    from { opacity: 0; transform: scale(0.8); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
   /* ─── RESPONSIVE ─── */
   @media (max-width: 900px) {
     .kpi-grid    { grid-template-columns: 1fr 1fr; }
     .chart-grid  { grid-template-columns: 1fr; }
     .news-grid   { grid-template-columns: 1fr; }
+    .countdown-wrap { display: none; }
   }
 
   @media (max-width: 540px) {
@@ -453,9 +567,16 @@
     <div class="subtitle">Strait of Hormuz Shipping Metrics Dashboard · AIS · War Risk · Alternative Terminals</div>
   </div>
   <div class="header-right">
-    <div class="last-updated">마지막 업데이트: <span id="lastUpdated">—</span></div>
+    <div id="liveBadge" class="live-badge sim-mode">
+      <span class="live-dot yellow"></span>
+      <span id="liveBadgeText">SIM MODE</span>
+    </div>
+    <div class="countdown-wrap">
+      자동갱신: <span class="cd-num" id="countdown">5:00</span>
+    </div>
+    <div class="last-updated">업데이트: <span id="lastUpdated">—</span></div>
     <button class="refresh-btn" id="refreshBtn">
-      <span class="refresh-icon">↻</span> 데이터 새로고침
+      <span class="refresh-icon">↻</span> 새로고침
     </button>
   </div>
 </header>
@@ -574,7 +695,10 @@
   </div>
 
   <!-- ─── NEWS FEED SECTION ─── -->
-  <div class="section-title">📰 대체 수출 터미널 가동 현황 뉴스 (Saudi / Abu Dhabi)</div>
+  <div class="news-section-header">
+    <span class="section-label">📰 실시간 뉴스 피드 (Saudi / Abu Dhabi · Hormuz)</span>
+    <span class="feed-mode sim-mode" id="feedModeLabel">SIM</span>
+  </div>
 
   <div class="news-grid" id="newsFeed"></div>
 
@@ -588,70 +712,155 @@
 </footer>
 
 <script>
-// ─── DATA ───────────────────────────────────────────────
+// ─── STATIC DATA ─────────────────────────────────────────
 const VESSEL_LABELS = ['1/6','1/13','1/20','1/27','2/3','2/10','2/17','2/24','3/3'];
 const VESSEL_BASE   = [49, 47, 46, 43, 41, 39, 37, 36, 38];
-const VESSEL_WARN   = 40; // threshold
+const VESSEL_WARN   = 40;
 
 const RISK_LABELS = ['2025/10','2025/11','2025/12','2026/01','2026/02','2026/03'];
 const RISK_BASE   = [0.15, 0.28, 0.45, 0.65, 1.20, 1.85];
 
-const NEWS_ITEMS = [
+const SIM_NEWS = [
   {
-    date: '2026-03-02',
-    source: 'Saudi Aramco IR',
-    opBadge: 'operational',
-    opLabel: 'OPERATIONAL',
+    date: '2026-03-02', source: 'Saudi Aramco IR', opBadge: 'operational', opLabel: 'OPERATIONAL', isRss: false,
     title: '사우디 야부(Yanbu) 터미널, 월 350만 BPD 처리 — 한계 용량 임박',
-    body: '야부 수출 터미널이 현재 92% 가동률로 운영 중. 호르무즈 우회 수요 급증에 따라 용량 확장 협의에 착수. 증설 완료 시 최대 400만 BPD 처리 가능 전망.',
+    body: '야부 수출 터미널이 현재 92% 가동률로 운영 중. 호르무즈 우회 수요 급증에 따라 용량 확장 협의에 착수.',
     barPct: 92, barColor: 'green', barLabel: '가동률 92%'
   },
   {
-    date: '2026-02-28',
-    source: 'ADNOC Press Release',
-    opBadge: 'expanding',
-    opLabel: 'EXPANDING',
+    date: '2026-02-28', source: 'ADNOC Press Release', opBadge: 'expanding', opLabel: 'EXPANDING', isRss: false,
     title: 'ADNOC Jafurah 가스전 수출 터미널, 78% 가동 — Q3 확장 공사 진행 중',
-    body: '아부다비 Jafurah 터미널은 현재 78% 가동 중이며, 2025년 3분기 완공된 2단계 확장으로 하루 150만 BOE 추가 처리 능력 확보 완료.',
+    body: '아부다비 Jafurah 터미널은 현재 78% 가동 중이며, 2단계 확장으로 하루 150만 BOE 추가 처리 능력 확보 완료.',
     barPct: 78, barColor: 'blue', barLabel: '가동률 78%'
   },
   {
-    date: '2026-03-01',
-    source: 'S&P Global Platts',
-    opBadge: 'expanding',
-    opLabel: 'EXPANDING',
+    date: '2026-03-01', source: 'S&P Global Platts', opBadge: 'expanding', opLabel: 'EXPANDING', isRss: false,
     title: 'Fujairah 석유 터미널, 서부 우회 루트 물동량 35% 급증',
-    body: '아랍에미리트 Fujairah 터미널이 호르무즈 우회 수요로 인해 보관 탱크 가동률 89%를 기록. 바이패스 파이프라인(Abu Dhabi-Fujairah) 최대 용량 도달 임박.',
+    body: 'Fujairah 터미널이 호르무즈 우회 수요로 보관 탱크 가동률 89% 기록. 바이패스 파이프라인 최대 용량 도달 임박.',
     barPct: 89, barColor: 'blue', barLabel: '탱크 가동률 89%'
   },
   {
-    date: '2026-02-26',
-    source: 'Reuters',
-    opBadge: 'monitoring',
-    opLabel: 'MONITORING',
+    date: '2026-02-26', source: 'Reuters', opBadge: 'monitoring', opLabel: 'MONITORING', isRss: false,
     title: '이라크 바스라(Basra), 대체 수출 루트 확보 위해 이란과 협상 중단',
-    body: '이라크 석유부는 바스라 수출 터미널의 호르무즈 의존도 약 78%에 달한다고 발표. 사우디 아라비아와 파이프라인 연결 재개 협상 검토 중이나 합의까지 수개월 소요 예상.',
-    barPct: 22, barColor: 'yellow', barLabel: '대체 루트 가동 22%'
+    body: '이라크 석유부는 바스라 수출 터미널의 호르무즈 의존도 약 78%에 달한다고 발표. 사우디와 파이프라인 연결 재개 협상 검토 중.',
+    barPct: 22, barColor: 'yellow', barLabel: '대체 루트 22%'
   },
   {
-    date: '2026-03-03',
-    source: 'Lloyd\'s List',
-    opBadge: 'reduced',
-    opLabel: 'REDUCED',
+    date: '2026-03-03', source: "Lloyd's List", opBadge: 'reduced', opLabel: 'REDUCED', isRss: false,
     title: '호르무즈 통과 VLCC 운항 편수 전년 동기 대비 31% 감소 확인',
-    body: 'Lloyd\'s List Intelligence AIS 분석 결과, 2026년 2월 VLCC(초대형 원유 운반선) 호르무즈 통과 횟수가 전년 동기 대비 31% 급감. 이란 긴장 고조로 인한 선주들의 자발적 우회 항로 채택 증가.',
+    body: 'AIS 분석 결과, 2026년 2월 VLCC 호르무즈 통과 횟수가 전년 동기 대비 31% 급감. 이란 긴장 고조로 선주들의 자발적 우회 항로 채택 증가.',
     barPct: 31, barColor: 'red', barLabel: 'AIS 감소율 31%'
   },
   {
-    date: '2026-02-20',
-    source: 'Energy Intel',
-    opBadge: 'operational',
-    opLabel: 'OPERATIONAL',
-    title: '사우디 동서 파이프라인(ESPO), 긴급 증산 가동 — 일 500만 BPD 목표',
-    body: '사우디 아람코의 동서 횡단 파이프라인이 긴장 고조에 대응해 현재 87% 가동 중. 야부 수출 측 증산 연계 시 하루 500만 BPD까지 우회 수송 가능할 것으로 예상.',
-    barPct: 87, barColor: 'green', barLabel: '파이프라인 가동 87%'
+    date: '2026-02-20', source: 'Energy Intel', opBadge: 'operational', opLabel: 'OPERATIONAL', isRss: false,
+    title: '사우디 동서 파이프라인, 긴급 증산 가동 — 일 500만 BPD 목표',
+    body: '사우디 아람코의 동서 횡단 파이프라인이 긴장 고조에 대응해 현재 87% 가동 중. 야부 수출 측 증산 연계 시 500만 BPD 우회 수송 가능.',
+    barPct: 87, barColor: 'green', barLabel: '파이프라인 87%'
   }
 ];
+
+// ─── RSS FEED INTEGRATION ────────────────────────────────
+const RSS_PROXY = 'https://api.rss2json.com/v1/api.json?rss_url=';
+const RSS_SOURCES = [
+  { url: 'https://feeds.reuters.com/reuters/energy', name: 'Reuters Energy' },
+  { url: 'https://feeds.reuters.com/reuters/businessNews', name: 'Reuters Business' }
+];
+const KEYWORDS = ['hormuz','iran','tanker','crude oil','vlcc','shipping','gulf','aramco','opec','sanctions','naval','oil supply'];
+
+let currentNewsItems = [...SIM_NEWS];
+let isLiveMode = false;
+
+function classifyItem(text) {
+  const t = text.toLowerCase();
+  if (/expand|increas|surge|boost|grow/.test(t)) return { opBadge: 'expanding', opLabel: 'EXPANDING' };
+  if (/reduc|declin|drop|fall|cut|low/.test(t))  return { opBadge: 'reduced',   opLabel: 'REDUCED' };
+  if (/normal|operat|function|active/.test(t))    return { opBadge: 'operational', opLabel: 'OPERATIONAL' };
+  return { opBadge: 'monitoring', opLabel: 'MONITORING' };
+}
+
+function barColorForBadge(badge) {
+  return { operational: 'green', expanding: 'blue', monitoring: 'yellow', reduced: 'red' }[badge] || 'blue';
+}
+
+function stripHtml(html) {
+  return (html || '').replace(/<[^>]+>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").trim();
+}
+
+function mapRSSItem(item, sourceName) {
+  const title = stripHtml(item.title || '');
+  const body  = stripHtml(item.description || '').slice(0, 220) + '…';
+  const date  = (item.pubDate || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const { opBadge, opLabel } = classifyItem(title + ' ' + body);
+  const barColor = barColorForBadge(opBadge);
+  const barPct   = 35 + Math.floor(Math.random() * 55);
+  return { date, source: sourceName, opBadge, opLabel, isRss: true, title, body, barPct, barColor, barLabel: `${barPct}%` };
+}
+
+async function fetchRSSNews() {
+  const results = [];
+  for (const src of RSS_SOURCES) {
+    try {
+      const resp = await fetch(
+        `${RSS_PROXY}${encodeURIComponent(src.url)}&count=12`,
+        { signal: AbortSignal.timeout(6000) }
+      );
+      if (!resp.ok) continue;
+      const json = await resp.json();
+      if (json.status !== 'ok' || !Array.isArray(json.items)) continue;
+
+      const relevant = json.items.filter(it => {
+        const t = ((it.title || '') + ' ' + (it.description || '')).toLowerCase();
+        return KEYWORDS.some(kw => t.includes(kw));
+      });
+      relevant.slice(0, 3).forEach(it => results.push(mapRSSItem(it, src.name)));
+    } catch (e) {
+      /* network / timeout — silent fallback */
+    }
+  }
+  return results;
+}
+
+async function refreshNews() {
+  const liveItems = await fetchRSSNews();
+  if (liveItems.length >= 2) {
+    // Blend: up to 4 live + 2 sim (keep total ≤ 6, newest first)
+    const blended = [...liveItems.slice(0, 4), ...SIM_NEWS.slice(0, Math.max(0, 6 - liveItems.length))];
+    currentNewsItems = blended.slice(0, 6);
+    setLiveMode(true);
+  } else {
+    // Shuffle sim data slightly for freshness
+    currentNewsItems = shuffleSim();
+    setLiveMode(false);
+  }
+  renderNews(currentNewsItems);
+}
+
+function shuffleSim() {
+  const pool = SIM_NEWS.map(n => ({ ...n, barPct: Math.max(10, Math.min(99, n.barPct + Math.round((Math.random()-0.5)*8))), barLabel: `${Math.max(10, Math.min(99, n.barPct + Math.round((Math.random()-0.5)*8)))}%` }));
+  return pool.sort(() => Math.random() - 0.48).slice(0, 6);
+}
+
+function setLiveMode(live) {
+  isLiveMode = live;
+  const badge = document.getElementById('liveBadge');
+  const dot   = badge.querySelector('.live-dot');
+  const text  = document.getElementById('liveBadgeText');
+  const feed  = document.getElementById('feedModeLabel');
+
+  if (live) {
+    badge.className = 'live-badge rss-live';
+    dot.className   = 'live-dot green';
+    text.textContent = 'RSS LIVE';
+    feed.className  = 'feed-mode rss-live';
+    feed.textContent = 'RSS LIVE';
+  } else {
+    badge.className = 'live-badge sim-mode';
+    dot.className   = 'live-dot yellow';
+    text.textContent = 'SIM MODE';
+    feed.className  = 'feed-mode sim-mode';
+    feed.textContent = 'SIM';
+  }
+}
 
 // ─── CHART DEFAULTS ──────────────────────────────────────
 Chart.defaults.color = '#94a3b8';
@@ -699,31 +908,18 @@ const vesselChart = new Chart(vesselCtx, {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: {
-        labels: { font: { size: 11 }, boxWidth: 18, padding: 12 }
-      },
+      legend: { labels: { font: { size: 11 }, boxWidth: 18, padding: 12 } },
       tooltip: {
-        backgroundColor: '#1e293b',
-        borderColor: '#334155',
-        borderWidth: 1,
-        callbacks: {
-          label: ctx => ` ${ctx.parsed.y}척/일`
-        }
+        backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1,
+        callbacks: { label: ctx => ` ${ctx.parsed.y}척/일` }
       }
     },
     scales: {
-      x: {
-        grid: { color: 'rgba(51,65,85,0.5)' },
-        ticks: { font: { size: 10 } }
-      },
+      x: { grid: { color: 'rgba(51,65,85,0.5)' }, ticks: { font: { size: 10 } } },
       y: {
-        min: 25,
-        max: 58,
+        min: 25, max: 58,
         grid: { color: 'rgba(51,65,85,0.5)' },
-        ticks: {
-          font: { size: 10 },
-          callback: v => `${v}척`
-        }
+        ticks: { font: { size: 10 }, callback: v => `${v}척` }
       }
     }
   }
@@ -751,9 +947,7 @@ const warRiskChart = new Chart(riskCtx, {
       data: riskData,
       backgroundColor: getRiskColors(riskData),
       borderColor: getRiskColors(riskData).map(c => c.replace('0.8','1')),
-      borderWidth: 1,
-      borderRadius: 5,
-      borderSkipped: false
+      borderWidth: 1, borderRadius: 5, borderSkipped: false
     }]
   },
   options: {
@@ -762,26 +956,15 @@ const warRiskChart = new Chart(riskCtx, {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#1e293b',
-        borderColor: '#334155',
-        borderWidth: 1,
-        callbacks: {
-          label: ctx => ` +${ctx.parsed.y.toFixed(2)}% (기본료 대비)`
-        }
+        backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1,
+        callbacks: { label: ctx => ` +${ctx.parsed.y.toFixed(2)}% (기본료 대비)` }
       }
     },
     scales: {
-      x: {
-        grid: { color: 'rgba(51,65,85,0.5)' },
-        ticks: { font: { size: 10 } }
-      },
+      x: { grid: { color: 'rgba(51,65,85,0.5)' }, ticks: { font: { size: 10 } } },
       y: {
-        min: 0,
-        grid: { color: 'rgba(51,65,85,0.5)' },
-        ticks: {
-          font: { size: 10 },
-          callback: v => `+${v.toFixed(2)}%`
-        }
+        min: 0, grid: { color: 'rgba(51,65,85,0.5)' },
+        ticks: { font: { size: 10 }, callback: v => `+${v.toFixed(2)}%` }
       }
     }
   }
@@ -797,6 +980,7 @@ function renderNews(items) {
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
           <span class="news-source">${n.source}</span>
           <span class="news-op-badge ${n.opBadge}">${n.opLabel}</span>
+          ${n.isRss ? '<span class="news-new-badge">NEW</span>' : ''}
         </div>
       </div>
       <div class="news-title">${n.title}</div>
@@ -811,54 +995,77 @@ function renderNews(items) {
   `).join('');
 }
 
-renderNews(NEWS_ITEMS);
-
 // ─── TIMESTAMP ───────────────────────────────────────────
 function updateTimestamp() {
   const now = new Date();
-  const fmt = new Intl.DateTimeFormat('ko-KR', {
+  document.getElementById('lastUpdated').textContent = new Intl.DateTimeFormat('ko-KR', {
     year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
   }).format(now);
-  document.getElementById('lastUpdated').textContent = fmt;
 }
 
-// ─── REFRESH SIMULATION ──────────────────────────────────
-document.getElementById('refreshBtn').addEventListener('click', function () {
+// ─── CHART + KPI SIMULATION ──────────────────────────────
+function simulateCharts() {
+  const lastV = vesselData[vesselData.length - 1];
+  const newV  = Math.max(28, Math.min(55, lastV + Math.round((Math.random() - 0.55) * 4)));
+  vesselData  = [...vesselData.slice(1), newV];
+  vesselChart.data.datasets[0].data = vesselData;
+  vesselChart.data.datasets[0].pointBackgroundColor = vesselData.map(v => v < VESSEL_WARN ? '#ef4444' : '#06b6d4');
+  vesselChart.update('active');
+
+  const lastR = riskData[riskData.length - 1];
+  const newR  = Math.min(3.5, +(lastR + (Math.random() * 0.08 - 0.01)).toFixed(2));
+  riskData    = [...riskData.slice(1), newR];
+  warRiskChart.data.datasets[0].data = riskData;
+  warRiskChart.data.datasets[0].backgroundColor = getRiskColors(riskData);
+  warRiskChart.update('active');
+
+  document.getElementById('vesselCount').textContent = newV;
+  document.getElementById('warRisk').innerHTML = `+${newR.toFixed(2)}<span style="font-size:1.1rem">%</span>`;
+}
+
+// ─── FULL REFRESH ────────────────────────────────────────
+async function doRefresh() {
+  simulateCharts();
+  await refreshNews();
+  updateTimestamp();
+}
+
+// ─── COUNTDOWN TIMER (5 min auto-refresh) ────────────────
+const AUTO_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+let countdownSec = AUTO_INTERVAL_MS / 1000;
+
+function updateCountdown() {
+  const m = Math.floor(countdownSec / 60);
+  const s = countdownSec % 60;
+  document.getElementById('countdown').textContent = `${m}:${String(s).padStart(2,'0')}`;
+  countdownSec--;
+  if (countdownSec < 0) countdownSec = AUTO_INTERVAL_MS / 1000 - 1;
+}
+
+setInterval(updateCountdown, 1000);
+
+setInterval(async () => {
+  countdownSec = AUTO_INTERVAL_MS / 1000;
+  await doRefresh();
+}, AUTO_INTERVAL_MS);
+
+// ─── MANUAL REFRESH BUTTON ───────────────────────────────
+document.getElementById('refreshBtn').addEventListener('click', async function () {
   const btn = this;
   btn.classList.add('spinning');
   btn.disabled = true;
-
-  setTimeout(() => {
-    // Vessel: random ±2 fluctuation on last value
-    const lastV = vesselData[vesselData.length - 1];
-    const newV = Math.max(28, Math.min(55, lastV + Math.round((Math.random() - 0.55) * 4)));
-    vesselData = [...vesselData.slice(1), newV];
-    vesselChart.data.datasets[0].data = vesselData;
-    vesselChart.data.datasets[0].pointBackgroundColor = vesselData.map(v => v < VESSEL_WARN ? '#ef4444' : '#06b6d4');
-    vesselChart.update('active');
-
-    // Risk: slight upward drift
-    const lastR = riskData[riskData.length - 1];
-    const newR = Math.min(3.5, +(lastR + (Math.random() * 0.08 - 0.01)).toFixed(2));
-    riskData = [...riskData.slice(1), newR];
-    warRiskChart.data.datasets[0].data = riskData;
-    warRiskChart.data.datasets[0].backgroundColor = getRiskColors(riskData);
-    warRiskChart.update('active');
-
-    // KPI cards
-    document.getElementById('vesselCount').textContent = newV;
-    document.getElementById('warRisk').innerHTML = `+${newR.toFixed(2)}<span style="font-size:1.1rem">%</span>`;
-
-    updateTimestamp();
-    btn.classList.remove('spinning');
-    btn.disabled = false;
-  }, 900);
+  countdownSec = AUTO_INTERVAL_MS / 1000;
+  await doRefresh();
+  btn.classList.remove('spinning');
+  btn.disabled = false;
 });
 
 // ─── INIT ────────────────────────────────────────────────
+renderNews(SIM_NEWS);
 updateTimestamp();
+updateCountdown();
+refreshNews(); // attempt RSS on first load
 </script>
 </body>
 </html>
