@@ -175,26 +175,99 @@ def print_section(title: str, rows: list):
                    colalign=("left", "left", "right", "right", "right", "right")))
 
 
+# ── 분석 가이드 ────────────────────────────────────────────────────────────────
+
+# bad_direction: "up" = 상승이 부정적, "down" = 하락이 부정적
+# focus_tickers: None 이면 전체 평균, 리스트면 해당 티커만 집계
+ANALYSIS_RULES = {
+    "미국 국채 금리 (FRED DGS 시리즈)": {
+        "bad_direction": "up",
+        "bad_msg":  "금리 상승 → 채권가 하락·달러 강세·위험자산 압박 ↑",
+        "good_msg": "금리 하락 → 채권가 상승·유동성 완화·위험자산 선호 ↑",
+        "focus_tickers": ["DGS10", "DGS20", "^TNX", "^TYX"],  # 중장기 위주
+    },
+    "오일 선물": {
+        "bad_direction": "up",
+        "bad_msg":  "유가 상승 → 인플레 압력·기업 원가 증가·소비 위축 우려",
+        "good_msg": "유가 하락 → 인플레 완화·기업 비용 감소·소비 여력 개선",
+        "focus_tickers": None,
+    },
+    "달러원 환율": {
+        "bad_direction": "up",
+        "bad_msg":  "원화 약세 → 수입물가 상승·외국인 매도 압력 증가",
+        "good_msg": "원화 강세 → 수입물가 안정·외국인 유입 환경 우호",
+        "focus_tickers": None,
+    },
+    "미국 상장 한국 ETF": {
+        "bad_direction": "down",
+        "bad_msg":  "ETF 하락 → 한국 증시 약세·외국인 순매도 신호",
+        "good_msg": "ETF 상승 → 한국 증시 강세·외국인 순매수 신호",
+        "focus_tickers": ["EWY", "FLKR"],  # 레버리지(KORU) 제외
+    },
+    "미국 증시 선물": {
+        "bad_direction": "down",
+        "bad_msg":  "선물 하락 → 미국 증시 약세 개장 예상·리스크오프",
+        "good_msg": "선물 상승 → 미국 증시 강세 개장 예상·리스크온",
+        "focus_tickers": ["ES=F", "NQ=F"],  # S&P·나스닥 위주
+    },
+}
+
+
+def print_analysis(section_title: str, raw_data: list):
+    """섹션 데이터를 분석해 방향·판단·가이드를 출력합니다."""
+    rule = ANALYSIS_RULES.get(section_title)
+    if not rule:
+        return
+
+    focus   = rule["focus_tickers"]
+    valid   = [d for d in raw_data if d["pct"] is not None]
+    targets = [d for d in valid if d["ticker"] in focus] if focus else valid
+    if not targets:
+        targets = valid  # focus 매칭 없으면 전체 사용
+    if not targets:
+        return
+
+    avg_pct = sum(d["pct"] for d in targets) / len(targets)
+    bad_up  = rule["bad_direction"] == "up"
+    is_bad  = (avg_pct > 0) if bad_up else (avg_pct < 0)
+
+    arrow   = "▲" if avg_pct >= 0 else "▼"
+    verdict = "⚠  부정적" if is_bad else "✓  긍정적"
+    msg     = rule["bad_msg"] if is_bad else rule["good_msg"]
+    detail  = "  /  ".join(
+        f"{d['name']} {'▲' if d['pct'] >= 0 else '▼'}{abs(d['pct']):.2f}%"
+        for d in targets
+    )
+
+    print(f"\n  [ 분석 ] {detail}")
+    print(f"  [ 판단 ] 평균 {arrow}{abs(avg_pct):.2f}% → {verdict}")
+    print(f"  [ 가이드 ] {msg}")
+
+
 # ── 국채 금리 섹션 (FRED 우선, fallback yfinance) ────────────────────────────
 
-def build_bond_rows() -> list:
-    rows   = []
+def build_bond_rows() -> tuple:
+    rows, raw_data = [], []
     used_fred = False
 
     for series_id, name in FRED_BOND_SERIES.items():
         data = fetch_fred_series(series_id)
         rows.append(format_row(name, series_id, data, unit="%"))
+        raw_data.append({"ticker": series_id, "name": name.strip(), "pct": data.get("pct")})
         if data.get("price") is not None:
             used_fred = True
 
     # FRED 전부 실패 시 yfinance fallback
     if not used_fred:
         print("  [!] FRED 수집 실패 → yfinance fallback 사용")
+        rows.clear()
+        raw_data.clear()
         for ticker, name in YF_BOND_FALLBACK.items():
             data = fetch_quote(ticker)
             rows.append(format_row(name, ticker, data, unit="%"))
+            raw_data.append({"ticker": ticker, "name": name, "pct": data.get("pct")})
 
-    return rows
+    return rows, raw_data
 
 
 # ── 메인 ───────────────────────────────────────────────────────────────────────
@@ -207,17 +280,20 @@ def main():
     print(f"{'━'*68}")
 
     # 국채 금리 (FRED)
-    bond_rows = build_bond_rows()
+    bond_rows, bond_raw = build_bond_rows()
     print_section("미국 국채 금리 (FRED DGS 시리즈)", bond_rows)
+    print_analysis("미국 국채 금리 (FRED DGS 시리즈)", bond_raw)
 
     # 나머지 섹션 (yfinance)
     for section, items in TICKERS.items():
         unit = "KRW" if section == "달러원 환율" else ""
-        rows = []
+        rows, raw_data = [], []
         for ticker, name in items.items():
             data = fetch_quote(ticker)
             rows.append(format_row(name, ticker, data, unit))
+            raw_data.append({"ticker": ticker, "name": name, "pct": data.get("pct")})
         print_section(section, rows)
+        print_analysis(section, raw_data)
 
     print(f"\n{'━'*68}")
     print("  ※ 국채 금리: FRED DGS 시리즈 (Daily Treasury Constant Maturity Rate)")
