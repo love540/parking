@@ -589,6 +589,7 @@
     <span class="icon">⚠️</span>
     <span>
       <strong>경보:</strong> 2026년 3월 기준 호르무즈 해협 일일 통과 선박 수가 기준치(50척) 대비 23% 급감. 전쟁보험료 1.85%p 폭등. 공급망 리스크 고조.
+      <span style="opacity:0.7"> · 수치 지표는 2026-03-03 AIS / LMA 공식 데이터 기준 고정값 · 뉴스만 실시간 갱신</span>
     </span>
   </div>
 
@@ -823,21 +824,16 @@ async function fetchRSSNews() {
 async function refreshNews() {
   const liveItems = await fetchRSSNews();
   if (liveItems.length >= 2) {
-    // Blend: up to 4 live + 2 sim (keep total ≤ 6, newest first)
+    // Blend: up to 4 live + 2 sim baseline
     const blended = [...liveItems.slice(0, 4), ...SIM_NEWS.slice(0, Math.max(0, 6 - liveItems.length))];
     currentNewsItems = blended.slice(0, 6);
     setLiveMode(true);
   } else {
-    // Shuffle sim data slightly for freshness
-    currentNewsItems = shuffleSim();
+    // Keep static baseline data as-is — no random mutation
+    currentNewsItems = SIM_NEWS;
     setLiveMode(false);
   }
   renderNews(currentNewsItems);
-}
-
-function shuffleSim() {
-  const pool = SIM_NEWS.map(n => ({ ...n, barPct: Math.max(10, Math.min(99, n.barPct + Math.round((Math.random()-0.5)*8))), barLabel: `${Math.max(10, Math.min(99, n.barPct + Math.round((Math.random()-0.5)*8)))}%` }));
-  return pool.sort(() => Math.random() - 0.48).slice(0, 6);
 }
 
 function setLiveMode(live) {
@@ -1004,29 +1000,10 @@ function updateTimestamp() {
   }).format(now);
 }
 
-// ─── CHART + KPI SIMULATION ──────────────────────────────
-function simulateCharts() {
-  const lastV = vesselData[vesselData.length - 1];
-  const newV  = Math.max(28, Math.min(55, lastV + Math.round((Math.random() - 0.55) * 4)));
-  vesselData  = [...vesselData.slice(1), newV];
-  vesselChart.data.datasets[0].data = vesselData;
-  vesselChart.data.datasets[0].pointBackgroundColor = vesselData.map(v => v < VESSEL_WARN ? '#ef4444' : '#06b6d4');
-  vesselChart.update('active');
-
-  const lastR = riskData[riskData.length - 1];
-  const newR  = Math.min(3.5, +(lastR + (Math.random() * 0.08 - 0.01)).toFixed(2));
-  riskData    = [...riskData.slice(1), newR];
-  warRiskChart.data.datasets[0].data = riskData;
-  warRiskChart.data.datasets[0].backgroundColor = getRiskColors(riskData);
-  warRiskChart.update('active');
-
-  document.getElementById('vesselCount').textContent = newV;
-  document.getElementById('warRisk').innerHTML = `+${newR.toFixed(2)}<span style="font-size:1.1rem">%</span>`;
-}
-
 // ─── FULL REFRESH ────────────────────────────────────────
+// Charts and KPI values are fixed to last verified data (2026-03-03 AIS / LMA).
+// Only news is refreshed (RSS fetch).
 async function doRefresh() {
-  simulateCharts();
   await refreshNews();
   updateTimestamp();
 }
