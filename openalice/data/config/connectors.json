@@ -1,0 +1,6 @@
+{
+  "web": { "port": 3002 },
+  "mcp": { "port": 3001 },
+  "mcpAsk": { "enabled": false },
+  "telegram": { "enabled": false, "chatIds": [] }
+}

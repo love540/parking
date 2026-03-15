@@ -1,0 +1,39 @@
+{
+  "enabled": true,
+  "intervalMinutes": 15,
+  "maxInMemory": 2000,
+  "retentionDays": 7,
+  "piggybackOpenBB": true,
+  "feeds": [
+    {
+      "name": "Reuters Business",
+      "url": "https://feeds.reuters.com/reuters/businessNews",
+      "source": "reuters",
+      "categories": ["business", "economy"]
+    },
+    {
+      "name": "CNBC Finance",
+      "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",
+      "source": "cnbc",
+      "categories": ["finance", "stocks"]
+    },
+    {
+      "name": "CNBC Technology",
+      "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910",
+      "source": "cnbc",
+      "categories": ["technology", "stocks"]
+    },
+    {
+      "name": "Seeking Alpha Market News",
+      "url": "https://seekingalpha.com/market_currents.xml",
+      "source": "seekingalpha",
+      "categories": ["stocks", "analysis"]
+    },
+    {
+      "name": "Yahoo Finance",
+      "url": "https://finance.yahoo.com/news/rssindex",
+      "source": "yahoo",
+      "categories": ["finance", "stocks"]
+    }
+  ]
+}

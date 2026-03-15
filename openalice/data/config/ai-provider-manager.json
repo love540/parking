@@ -1,0 +1,6 @@
+{
+  "backend": "claude-code",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "apiKeys": {}
+}

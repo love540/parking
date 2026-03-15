@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "every": "60m",
+  "prompt": "Read data/brain/heartbeat.md and follow the instructions inside.",
+  "activeHours": null
+}

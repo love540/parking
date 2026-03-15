@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "providers": {
+    "equity": "yfinance",
+    "crypto": "yfinance",
+    "currency": "yfinance",
+    "newsCompany": "yfinance",
+    "newsWorld": "yfinance"
+  },
+  "providerKeys": {},
+  "dataBackend": "sdk",
+  "apiServer": {
+    "enabled": true,
+    "port": 6901
+  }
+}
