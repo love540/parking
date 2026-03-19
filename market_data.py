@@ -1,27 +1,38 @@
 """
 금융 시장 데이터 수집 스크립트
 - 오일 선물 (Brent, WTI Crude)
+- 원자재 선물 (금, 은, 구리, 천연가스)
 - 미국 국채 금리 2Y/5Y/10Y/20Y/30Y  ← FRED API (정확한 20년물 포함)
 - 달러원 환율
 - 미국 상장 한국 ETF
 - 미국 증시 선물
+- CNN Fear & Greed Index
+- CNBC 시장 뉴스 헤드라인
 
 의존성 설치:
-    pip install yfinance fredapi tabulate
+    pip install yfinance fredapi tabulate requests feedparser
 
 FRED API 키 (무료 발급 필수):
     https://fred.stlouisfed.org/docs/api/api_key.html
     export FRED_API_KEY="your_key"
 """
 
+import email.utils
 import io
 import os
 import subprocess
 import sys
+import requests
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 from tabulate import tabulate
+
+try:
+    import feedparser
+    HAS_FEEDPARSER = True
+except ImportError:
+    HAS_FEEDPARSER = False
 
 try:
     from fredapi import Fred
@@ -38,6 +49,12 @@ TICKERS = {
     "오일 선물": {
         "BZ=F":  "Brent 원유 선물",
         "CL=F":  "WTI 원유 선물 (Crude Oil)",
+    },
+    "원자재 선물": {
+        "GC=F":  "금 선물 (Gold)",
+        "SI=F":  "은 선물 (Silver)",
+        "HG=F":  "구리 선물 (Copper) ★경기선행",
+        "NG=F":  "천연가스 선물 (Nat. Gas)",
     },
     "달러원 환율": {
         "KRW=X": "달러원 (USD/KRW)",
@@ -210,6 +227,12 @@ ANALYSIS_RULES = {
         "good_msg": "선물 상승 → 미국 증시 강세 개장 예상·리스크온",
         "focus_tickers": ["ES=F", "NQ=F"],  # S&P·나스닥 위주
     },
+    "원자재 선물": {
+        "bad_direction": "up",
+        "bad_msg":  "원자재 상승 → 인플레 자극·제조업 비용 압박 (구리↑ = 수요 회복 양면)",
+        "good_msg": "원자재 하락 → 인플레 완화·제조업 비용 감소 (구리↓ = 경기둔화 주의)",
+        "focus_tickers": ["GC=F", "HG=F"],  # 금(안전자산)·구리(경기선행) 위주
+    },
 }
 
 
@@ -244,6 +267,131 @@ def print_analysis(section_title: str, raw_data: list):
     print(f"  [ 가이드 ] {msg}")
 
 
+# ── CNN Fear & Greed Index ─────────────────────────────────────────────────────
+
+FGI_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+
+# (min, max, 한국어 레이블, 한국 증시 해석)
+FGI_LEVELS = [
+    (0,  24, "극도의 공포 (Extreme Fear)", "⚠  외국인 극단적 이탈 가능·변동성 급등 주의"),
+    (25, 44, "공포 (Fear)",               "⚠  미국 약세심리·외국인 매도 압력"),
+    (45, 55, "중립 (Neutral)",             "✓  방향성 모호·개별 재료 중심"),
+    (56, 74, "탐욕 (Greed)",               "✓  리스크온·외국인 한국 증시 유입 우호"),
+    (75, 100, "극도의 탐욕 (Extreme Greed)", "⚠  과열 구간·단기 조정 가능성 경계"),
+]
+
+
+def fetch_fear_greed() -> dict:
+    """CNN Fear & Greed Index 비공식 엔드포인트에서 현재 점수를 가져옵니다."""
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; market-monitor/1.0)"}
+        r = requests.get(FGI_URL, headers=headers, timeout=10)
+        r.raise_for_status()
+        j = r.json()
+        fg = j["fear_and_greed"]
+        return {
+            "score":    round(fg["score"], 1),
+            "prev":     round(fg.get("previous_close", fg["score"]), 1),
+            "rating":   fg.get("rating", ""),
+            "updated":  fg.get("timestamp", ""),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def print_fear_greed(data: dict):
+    print(f"\n{'═'*68}")
+    print(f"  CNN Fear & Greed Index")
+    print(f"{'═'*68}")
+
+    if "error" in data:
+        print(f"  오류: {data['error'][:60]}")
+        return
+
+    score  = data["score"]
+    prev   = data["prev"]
+    change = round(score - prev, 1)
+    arrow  = "▲" if change >= 0 else "▼"
+
+    label, guide = "알 수 없음", ""
+    for lo, hi, lbl, gd in FGI_LEVELS:
+        if lo <= score <= hi:
+            label, guide = lbl, gd
+            break
+
+    # 30칸 게이지 바
+    bar_len = 30
+    filled  = max(0, min(bar_len, int(score / 100 * bar_len)))
+    bar     = "█" * filled + "░" * (bar_len - filled)
+
+    print(f"  현재 점수 : {score}  ({arrow}{abs(change)} vs 전일  |  전일: {prev})")
+    print(f"  상태     : {label}")
+    print(f"  게이지   : [공포] [{bar}] [탐욕]")
+    print(f"\n  [ 판단 ] {guide}")
+
+
+# ── CNBC RSS 뉴스 헤드라인 ─────────────────────────────────────────────────────
+
+# CNBC 공개 RSS 피드 (Markets / Economy / Finance)
+NEWS_FEEDS = [
+    ("CNBC Markets",  "https://www.cnbc.com/id/15839135/device/rss/rss.html"),
+    ("CNBC Economy",  "https://www.cnbc.com/id/20910258/device/rss/rss.html"),
+    ("CNBC Finance",  "https://www.cnbc.com/id/10000664/device/rss/rss.html"),
+]
+NEWS_COUNT = 7   # 출력할 최신 헤드라인 수
+
+
+def fetch_news() -> list:
+    """CNBC RSS에서 최신 헤드라인을 가져옵니다."""
+    if not HAS_FEEDPARSER:
+        return [{"error": "feedparser 미설치 (pip install feedparser)"}]
+
+    items = []
+    for source, url in NEWS_FEEDS:
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries:
+                pub_str = ""
+                raw_pub = entry.get("published", "")
+                if raw_pub:
+                    try:
+                        dt = email.utils.parsedate_to_datetime(raw_pub)
+                        pub_str = dt.strftime("%m/%d %H:%M")
+                    except Exception:
+                        pub_str = raw_pub[:16]
+                items.append({
+                    "source":  source,
+                    "title":   entry.get("title", "(제목 없음)"),
+                    "time":    pub_str,
+                })
+        except Exception:
+            pass
+
+    # 최신순 정렬 후 상위 N개
+    items.sort(key=lambda x: x["time"], reverse=True)
+    return items[:NEWS_COUNT]
+
+
+def print_news(items: list):
+    print(f"\n{'═'*68}")
+    print(f"  글로벌 금융 뉴스 헤드라인 (CNBC RSS)")
+    print(f"{'═'*68}")
+
+    if not items:
+        print("  뉴스를 불러올 수 없습니다.")
+        return
+    if "error" in items[0]:
+        print(f"  오류: {items[0]['error']}")
+        return
+
+    for i, item in enumerate(items, 1):
+        title = item["title"]
+        if len(title) > 60:
+            title = title[:57] + "..."
+        print(f"  {i}. [{item['time']}] {title}")
+        print(f"     └ {item['source']}")
+
+
 # ── 국채 금리 섹션 (FRED 우선, fallback yfinance) ────────────────────────────
 
 def build_bond_rows() -> tuple:
@@ -275,16 +423,18 @@ def build_bond_rows() -> tuple:
 def main():
     print(f"\n{'━'*68}")
     print(f"  글로벌 금융 시장 데이터  |  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    src = "FRED + Yahoo Finance"
-    print(f"  데이터 출처: {src}")
+    print(f"  데이터 출처: FRED + Yahoo Finance + CNN + CNBC RSS")
     print(f"{'━'*68}")
 
-    # 국채 금리 (FRED)
+    # ① CNN Fear & Greed Index (맨 위 → 전체 시장 심리 파악)
+    print_fear_greed(fetch_fear_greed())
+
+    # ② 국채 금리 (FRED)
     bond_rows, bond_raw = build_bond_rows()
     print_section("미국 국채 금리 (FRED DGS 시리즈)", bond_rows)
     print_analysis("미국 국채 금리 (FRED DGS 시리즈)", bond_raw)
 
-    # 나머지 섹션 (yfinance)
+    # ③ 나머지 섹션 (yfinance)
     for section, items in TICKERS.items():
         unit = "KRW" if section == "달러원 환율" else ""
         rows, raw_data = [], []
@@ -295,11 +445,15 @@ def main():
         print_section(section, rows)
         print_analysis(section, raw_data)
 
+    # ④ 뉴스 헤드라인 (맨 아래)
+    print_news(fetch_news())
+
     print(f"\n{'━'*68}")
     print("  ※ 국채 금리: FRED DGS 시리즈 (Daily Treasury Constant Maturity Rate)")
     print("  ※ DGS20 = 20년물 정확한 수익률 (yfinance 미지원 → FRED 직접 조회)")
     print("  ※ 등락은 직전 영업일 대비 / FRED 기준일은 MM/DD 로 표시")
     print("  ※ 선물 가격은 최근 월물 기준 (yfinance)")
+    print("  ※ Fear & Greed: CNN 비공식 API / 뉴스: CNBC RSS (무료·공개)")
     print(f"{'━'*68}\n")
 
 
